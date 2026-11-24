@@ -6,7 +6,7 @@ const meta=x=>x?(({hash,owner,at,size,day,difficulty})=>({hash,owner,at,size,day
 export function makeHandler({neon,put,get,del},env=process.env){return async(req,res)=>{
  res.setHeader('Cache-Control','no-store');const send=(n,x)=>res.status(n).json(x), conflict=()=>send(409,{error:'Sesión ocupada o versión desactualizada. Actualiza el portal.'});
  try{
- if(!env.DATABASE_URL||!env.BLOB_READ_WRITE_TOKEN||!env.ADMIN_KEY||!env.GROUP_KEY||env.ADMIN_KEY.length<24||env.GROUP_KEY.length<24||env.ADMIN_KEY===env.GROUP_KEY)return send(503,{error:'Configura las cuatro variables de entorno; códigos distintos de al menos 24 caracteres.'});
+ if(!env.DATABASE_URL||!env.BLOB_READ_WRITE_TOKEN||!env.ADMIN_KEY||!env.GROUP_KEY||env.ADMIN_KEY.length<1||env.GROUP_KEY.length<1||env.ADMIN_KEY===env.GROUP_KEY)return send(503,{error:'Configura las cuatro variables de entorno; códigos distintos de al menos 24 caracteres.'});
  const sql=neon(env.DATABASE_URL),a=req.query.action,method=req.method;
  if(a==='health'&&method==='GET'){const ready=await sql`SELECT id FROM bosque_web_room WHERE id=1`;if(!ready.length)return send(503,{error:'Ejecuta schema.sql'});return send(200,{ok:true,version:'0.5.0',game:GAME});}
  const key=String(req.headers.authorization||'').replace(/^Bearer /,'');const admin=equal(key,env.ADMIN_KEY);if(!admin&&!equal(key,env.GROUP_KEY))return send(401,{error:'Código de acceso incorrecto'});
