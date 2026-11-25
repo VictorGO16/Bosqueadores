@@ -9,7 +9,7 @@ export function makeHandler({neon,put,get,del},env=process.env){return async(req
  for(const variable of ['DATABASE_URL','BLOB_READ_WRITE_TOKEN','ADMIN_KEY','GROUP_KEY'])if(!env[variable])return send(503,{error:'Falta '+variable});
  if(env.ADMIN_KEY===env.GROUP_KEY)return send(503,{error:'ADMIN_KEY y GROUP_KEY deben ser diferentes'});
  const sql=neon(env.DATABASE_URL),a=req.query.action,method=req.method;
- if(a==='health'&&method==='GET'){const ready=await sql`SELECT id FROM bosque_web_room WHERE id=1`;if(!ready.length)return send(503,{error:'Ejecuta schema.sql'});return send(200,{ok:true,version:'0.6.1',game:GAME});}
+ if(a==='health'&&method==='GET'){const ready=await sql`SELECT id FROM bosque_web_room WHERE id=1`;if(!ready.length)return send(503,{error:'Ejecuta schema.sql'});return send(200,{ok:true,version:'0.6.2',game:GAME});}
  const key=String(req.headers.authorization||'').replace(/^Bearer /,'');const admin=equal(key,env.ADMIN_KEY);if(!admin&&!equal(key,env.GROUP_KEY))return send(401,{error:'Código de acceso incorrecto'});
  const token=String(req.headers['x-session']||''),th=hash(token);const [r]=await sql`SELECT * FROM bosque_web_room WHERE id=1`;if(!r)return send(503,{error:'Ejecuta schema.sql'});
  const own=Boolean(token&&equal(th,r.token_hash));
