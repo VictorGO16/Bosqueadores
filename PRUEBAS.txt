@@ -1,50 +1,62 @@
 
-> bosqueadores-web@0.6.0 verify
+> bosqueadores-web@0.6.1 verify
 > node --check api/room.js && node --check public/app.js && node --test tests/*.test.mjs
 
 TAP version 13
 # Subtest: initial publish, concurrent host, stale session, finish and receipt
 ok 1 - initial publish, concurrent host, stale session, finish and receipt
   ---
-  duration_ms: 33.80672
+  duration_ms: 50.216052
   type: 'test'
   ...
 # Subtest: health permits distinct short codes and diagnoses missing variables
 ok 2 - health permits distinct short codes and diagnoses missing variables
   ---
-  duration_ms: 0.286372
+  duration_ms: 0.308187
+  type: 'test'
+  ...
+# Subtest: same host resumes exact published save, publishes, and admin can recover unreserved progress
+ok 3 - same host resumes exact published save, publishes, and admin can recover unreserved progress
+  ---
+  duration_ms: 10.342773
+  type: 'test'
+  ...
+# Subtest: resume and manual publication cannot both win
+ok 4 - resume and manual publication cannot both win
+  ---
+  duration_ms: 3.962198
   type: 'test'
   ...
 # Subtest: roundtrip host/client and preserve world
-ok 3 - roundtrip host/client and preserve world
+ok 5 - roundtrip host/client and preserve world
   ---
-  duration_ms: 9.319012
+  duration_ms: 17.065074
   type: 'test'
   ...
 # Subtest: invalid game, CRC, traversal and ambiguous zip rejected
-ok 4 - invalid game, CRC, traversal and ambiguous zip rejected
+ok 6 - invalid game, CRC, traversal and ambiguous zip rejected
   ---
-  duration_ms: 1.499852
+  duration_ms: 1.77966
   type: 'test'
   ...
 # Subtest: real saves (when supplied)
-ok 5 - real saves (when supplied)
+ok 7 - real saves (when supplied) # SKIP
   ---
-  duration_ms: 218.12526
+  duration_ms: 0.072127
   type: 'test'
   ...
 # Subtest: download paths create correct role folder and retain inner save
-ok 6 - download paths create correct role folder and retain inner save
+ok 8 - download paths create correct role folder and retain inner save
   ---
-  duration_ms: 1.677794
+  duration_ms: 2.25138
   type: 'test'
   ...
-1..6
-# tests 6
+1..8
+# tests 8
 # suites 0
-# pass 6
+# pass 7
 # fail 0
 # cancelled 0
-# skipped 0
+# skipped 1
 # todo 0
-# duration_ms 294.665488
+# duration_ms 132.021474

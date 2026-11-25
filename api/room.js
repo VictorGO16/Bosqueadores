@@ -9,7 +9,7 @@ export function makeHandler({neon,put,get,del},env=process.env){return async(req
  for(const variable of ['DATABASE_URL','BLOB_READ_WRITE_TOKEN','ADMIN_KEY','GROUP_KEY'])if(!env[variable])return send(503,{error:'Falta '+variable});
  if(env.ADMIN_KEY===env.GROUP_KEY)return send(503,{error:'ADMIN_KEY y GROUP_KEY deben ser diferentes'});
  const sql=neon(env.DATABASE_URL),a=req.query.action,method=req.method;
- if(a==='health'&&method==='GET'){const ready=await sql`SELECT id FROM bosque_web_room WHERE id=1`;if(!ready.length)return send(503,{error:'Ejecuta schema.sql'});return send(200,{ok:true,version:'0.6.0',game:GAME});}
+ if(a==='health'&&method==='GET'){const ready=await sql`SELECT id FROM bosque_web_room WHERE id=1`;if(!ready.length)return send(503,{error:'Ejecuta schema.sql'});return send(200,{ok:true,version:'0.6.1',game:GAME});}
  const key=String(req.headers.authorization||'').replace(/^Bearer /,'');const admin=equal(key,env.ADMIN_KEY);if(!admin&&!equal(key,env.GROUP_KEY))return send(401,{error:'Código de acceso incorrecto'});
  const token=String(req.headers['x-session']||''),th=hash(token);const [r]=await sql`SELECT * FROM bosque_web_room WHERE id=1`;if(!r)return send(503,{error:'Ejecuta schema.sql'});
  const own=Boolean(token&&equal(th,r.token_hash));
@@ -19,22 +19,30 @@ export function makeHandler({neon,put,get,del},env=process.env){return async(req
  const download=(bytes,name)=>{res.setHeader('Content-Type','application/zip');res.setHeader('Content-Disposition',`attachment; filename="${name}"`);return res.status(200).send(bytes);};
  if(a==='status'&&method==='GET')return send(200,{game:GAME,head:meta(r.head),history:r.history.map(meta),host:r.owner,started:r.started,own,admin});
  if(a==='guest'&&method==='POST'){let p;try{p=upload();}catch(e){return send(400,{error:e.message});}return download(slot(guest(p),false),'Bosqueadores-invitado.zip');}
- if(a==='prepare'&&method==='POST'){
+ if((a==='prepare'||a==='resume')&&method==='POST'){
  if(!r.head)return send(409,{error:'Primero publica el mundo inicial'});
  if(r.owner)return conflict();const name=String(body.name||'').trim().slice(0,50);if(!name)return send(400,{error:'Indica tu nombre'});
- let p;try{p=upload();}catch(e){return send(400,{error:e.message});}if(p.host)return send(400,{error:'Sube tu guardado MultiplayerClient más reciente, no una ranura host antigua'});
- const output=slot(promote(await load(r.head),p),true);if(output.length>MAX)return send(400,{error:'Resultado demasiado grande'});
+ let p;try{p=upload();}catch(e){return send(400,{error:e.message});}let output;
+ if(a==='resume'){
+ if(!p.host)return send(400,{error:'Sube el SaveData.zip de Multiplayer, no de MultiplayerClient'});
+ if(name!==r.head.owner||hash(p.bytes)!==r.head.hash)return send(409,{error:'Para continuar, usa el mismo nombre del último host y el save exacto publicado. Si ya avanzaste sin reservar, solicita una publicación manual al administrador.'});
+ }else{
+ if(p.host)return send(400,{error:'Sube tu guardado MultiplayerClient más reciente, no una ranura host antigua'});
+ output=slot(promote(await load(r.head),p),true);if(output.length>MAX)return send(400,{error:'Resultado demasiado grande'});
+ }
  // Client generates token BEFORE request; retry can recover through cancel if download fails.
  if(!/^[a-f0-9]{64}$/.test(token))return send(400,{error:'Token de sesión inválido'});
  const rows=await sql`UPDATE bosque_web_room SET owner=${name},token_hash=${th},started=now() WHERE id=1 AND owner IS NULL AND head->>'hash'=${r.head.hash} RETURNING id`;
- if(!rows.length)return conflict();return download(output,'Bosqueadores-host.zip');}
+ if(!rows.length)return conflict();return a==='resume'?send(200,{ok:true}):download(output,'Bosqueadores-host.zip');}
  if(a==='publish'&&method==='POST'){
  if(!/^[a-f0-9]{64}$/.test(token))return send(400,{error:'Token de sesión inválido'});
- const initial=!r.head;if(initial?(!admin||r.owner):!own)return conflict();
- const name=initial?String(body.name||'').trim().slice(0,50):r.owner;if(!name)return send(400,{error:'Indica el nombre del host'});
+ const initial=!r.head, manual=body.manual===true;
+ if(manual){if(!admin)return send(403,{error:'Solo el administrador puede publicar sin sesión'});if(initial||r.owner||body.expectedHash!==r.head.hash)return conflict();}
+ else if(initial?(!admin||r.owner):!own)return conflict();
+ const name=(initial||manual)?String(body.name||'').trim().slice(0,50):r.owner;if(!name)return send(400,{error:'Indica el nombre del host'});
  let p;try{p=upload();}catch(e){return send(400,{error:e.message});}if(!p.host)return send(400,{error:'Sube un guardado Multiplayer del anfitrión'});
  // Reject a save with a timestamp earlier than the source world, not proof of provenance.
- if(r.head?.saveTime&&Date.parse(p.state.SaveTime)<Date.parse(r.head.saveTime))return send(400,{error:'El guardado es anterior al mundo compartido'});
+ if(r.head?.saveTime&&(!Number.isFinite(Date.parse(p.state.SaveTime))||Date.parse(p.state.SaveTime)<Date.parse(r.head.saveTime)))return send(400,{error:'El guardado es anterior al mundo compartido'});
  const g=slot(guest(p),false), h=hash(p.bytes);const blob=await put(`world/${randomUUID()}.zip`,p.bytes,{access:'private',addRandomSuffix:false,contentType:'application/zip',token:env.BLOB_READ_WRITE_TOKEN});
  const next={hash:h,owner:name,at:Date.now(),size:p.bytes.length,day:p.day,difficulty:p.difficulty,saveTime:p.state.SaveTime??null,url:blob.url};const all=[next,...r.history], history=all.slice(0,10);
  // Save immutable reference for retry of guest download; only the publishing session can retrieve it.

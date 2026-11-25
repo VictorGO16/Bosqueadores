@@ -5,3 +5,27 @@ const body=(host,day=24)=>({name:'Player',zip:fixture(host,GAME,day).toString('b
 test('initial publish, concurrent host, stale session, finish and receipt',async()=>{const call=harness(),a='1'.repeat(64),b='2'.repeat(64),c='3'.repeat(64);assert.equal((await call('status','bad')).code,401);assert.equal((await call('publish',env.GROUP_KEY,a,body(true))).code,409);const initial=await call('publish',env.ADMIN_KEY,a,body(true));assert.equal(initial.code,200);assert.equal(inspect(initial.body).host,false);assert.equal((await call('receipt',env.GROUP_KEY,a)).code,200);const results=await Promise.all([call('prepare',env.GROUP_KEY,b,body(false)),call('prepare',env.GROUP_KEY,c,body(false))]);assert.deepEqual(results.map(x=>x.code).sort(),[200,409]);const winner=results[0].code===200?b:c;assert.equal(inspect(results.find(x=>x.code===200).body).host,true);assert.equal((await call('publish',env.GROUP_KEY,a,body(true,25))).code,409);assert.equal((await call('publish',env.GROUP_KEY,winner,body(true,23))).code,400);assert.equal((await call('publish',env.GROUP_KEY,winner,body(true,25))).code,200);assert.equal((await call('status')).body.head.day,25);assert.equal((await call('status')).body.host,null);assert.equal((await call('receipt',env.GROUP_KEY,winner)).code,200);assert.equal((await call('receipt',env.GROUP_KEY,a)).code,404);});
 
 test('health permits distinct short codes and diagnoses missing variables',async()=>{for(const missing of [null,'DATABASE_URL','BLOB_READ_WRITE_TOKEN','ADMIN_KEY','GROUP_KEY']){const e={...env,ADMIN_KEY:'admin',GROUP_KEY:'group'};if(missing)delete e[missing];let result;const res={setHeader(){},status(n){this.code=n;return this},json(body){result={code:this.code,body};return this}};await makeHandler({neon:()=>async()=>[{id:1}]},e)({query:{action:'health'},method:'GET'},res);assert.equal(result.code,missing?503:200);if(missing)assert.equal(result.body.error,'Falta '+missing);}});
+
+test('same host resumes exact published save, publishes, and admin can recover unreserved progress',async()=>{
+ const call=harness(),a='1'.repeat(64),b='2'.repeat(64);
+ assert.equal((await call('publish',env.ADMIN_KEY,a,body(true))).code,200);
+ const base=(await call('status')).body.head.hash;
+ assert.equal((await call('resume',env.GROUP_KEY,b,body(true,25))).code,409);
+ assert.equal((await call('resume',env.GROUP_KEY,b,{...body(true),name:'Other'})).code,409);
+ assert.equal((await call('resume',env.GROUP_KEY,b,body(false))).code,400);
+ assert.equal((await call('resume',env.GROUP_KEY,b,body(true))).code,200);
+ assert.equal((await call('publish',env.ADMIN_KEY,a,{...body(true,25),manual:true,expectedHash:base})).code,409);
+ assert.equal((await call('publish',env.GROUP_KEY,b,body(true,25))).code,200);
+ const current=(await call('status')).body.head.hash;
+ assert.equal((await call('publish',env.GROUP_KEY,a,{...body(true,26),manual:true,expectedHash:current})).code,403);
+ assert.equal((await call('publish',env.ADMIN_KEY,a,{...body(true,26),manual:true,expectedHash:base})).code,409);
+ assert.equal((await call('publish',env.ADMIN_KEY,a,{...body(true,24),manual:true,expectedHash:current})).code,400);
+ assert.equal((await call('publish',env.ADMIN_KEY,a,{...body(true,26),manual:true,expectedHash:current})).code,200);
+ assert.equal((await call('status')).body.head.day,26);
+});
+test('resume and manual publication cannot both win',async()=>{
+ const call=harness(),a='1'.repeat(64),b='2'.repeat(64);
+ await call('publish',env.ADMIN_KEY,a,body(true));const expectedHash=(await call('status')).body.head.hash;
+ const results=await Promise.all([call('resume',env.GROUP_KEY,b,body(true)),call('publish',env.ADMIN_KEY,a,{...body(true,25),manual:true,expectedHash})]);
+ assert.deepEqual(results.map(x=>x.code).sort(),[200,409]);
+});
